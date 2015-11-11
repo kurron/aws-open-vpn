@@ -1,4 +1,4 @@
-resource "aws_instance" "registry" {
+resource "aws_instance" "openvpn" {
     count = "1"
 
     ami = "${lookup(var.aws_amis, var.aws_region)}"
@@ -10,10 +10,10 @@ resource "aws_instance" "registry" {
     instance_type = "t2.micro"
     key_name = "${lookup(var.key_name, var.aws_region)}"
     monitoring = true
-    vpc_security_group_ids = ["${aws_security_group.docker_traffic.id}"]
+    vpc_security_group_ids = ["${aws_security_group.all_traffic.id}"]
     subnet_id = "${element(aws_subnet.subnet.*.id, count.index)}"
     associate_public_ip_address = true
-    private_ip ="${lookup(var.registry_private_ip, count.index)}"
+    private_ip ="${lookup(var.instance_private_ip, count.index)}"
     source_dest_check = false
 
     root_block_device { 
@@ -23,16 +23,16 @@ resource "aws_instance" "registry" {
     }
 
     tags {
-        Name = "Registry ${lookup(var.subnet_name, count.index)}"
+        Name = "OpenVPN ${lookup(var.subnet_name, count.index)}"
         Realm = "${var.realm}"
         Purpose = "${var.purpose}"
         Managed-By = "${var.created_by}"
     }
 }
 
-resource "aws_eip" "registry" {
+resource "aws_eip" "openvpn" {
     count = "1"
-    instance = "${element(aws_instance.registry.*.id, count.index)}"
+    instance = "${element(aws_instance.openvpn.*.id, count.index)}"
     vpc = true
 }
 

@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
     enable_dns_hostnames = true
 
     tags {
-        Name = "Docker Registry"
+        Name = "OpenVPN"
         Realm = "${var.realm}"
         Purpose = "${var.purpose}"
         Managed-By = "${var.created_by}"
@@ -31,7 +31,7 @@ resource "aws_internet_gateway" "main" {
     vpc_id = "${aws_vpc.main.id}"
 
     tags {
-        Name = "Docker Registry"
+        Name = "OpenVPN"
         Realm = "${var.realm}"
         Purpose = "${var.purpose}"
         Managed-By = "${var.created_by}"
@@ -46,7 +46,7 @@ resource "aws_route_table" "main" {
     }
 
     tags {
-        Name = "Docker Registry"
+        Name = "OpenVPN"
         Realm = "${var.realm}"
         Purpose = "${var.purpose}"
         Managed-By = "${var.created_by}"
@@ -58,12 +58,12 @@ resource "aws_main_route_table_association" "main" {
     route_table_id = "${aws_route_table.main.id}"
 }
 
-resource "aws_security_group" "docker_traffic" {
-    name = "docker-traffic"
+resource "aws_security_group" "all_traffic" {
+    name = "all-traffic"
     description = "Allow inbound and outbound access on ALL ports."
     vpc_id = "${aws_vpc.main.id}"
     tags {
-        Name = "Docker Traffic"
+        Name = "OpenVPN"
         Realm = "${var.realm}"
         Purpose = "${var.purpose}"
         Managed-By = "${var.created_by}"
