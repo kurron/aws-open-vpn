@@ -1,3 +1,7 @@
+#TODO: FIX THIS!
+
+Don't forget to mention that you have log in and set the password `sudo passwd openvpn`
+
 #Overview
 This is an [Ansible](http://www.ansible.com/) playbook designed to greatly simplify the installation 
 of a [Docker Registry](https://docs.docker.com/registry/) into an AWS [Ubuntu 14.04](http://www.ubuntu.com/) instance.  The 
