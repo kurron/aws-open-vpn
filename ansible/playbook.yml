@@ -1,0 +1,115 @@
+#!/usr/bin/env ansible-playbook
+
+- name: Gather prerequisites 
+  hosts: all
+  gather_facts: True
+  tasks:
+    - name: create groups based on distribution
+      group_by: key={{ ansible_distribution }}
+
+- name: Update Packages 
+  hosts: Ubuntu
+  gather_facts: True
+  sudo: True
+  tasks:
+    - name: Update the instances packages
+      apt: update_cache=yes cache_valid_time=3600 upgrade=dist install_recommends=true
+
+- name: Install Docker
+  hosts: docker
+  sudo: True
+  vars:
+       user_account: ubuntu
+       compose_version: "1.5.0"
+  tasks:
+    - name: Install cURL
+      apt: name=curl state=latest update_cache=true cache_valid_time=600
+    - name: Download Docker Installation Script
+      command: /usr/bin/curl --location --output /root/install-docker https://get.docker.com/ creates=/root/install-docker
+    - name: Set Permission Bits On The Docker Installation Script
+      file: path=/root/install-docker owner=root group=root mode=0500
+    - name: Execute Docker Installation Script
+      shell: /root/install-docker creates=/usr/bin/docker
+    - name: Set Memory and Swap Accounting
+      lineinfile: dest=/etc/default/grub regexp='^GRUB_CMDLINE_LINUX=""' line='GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"'
+    - name: Make some adjustments to the Docker configuration
+      lineinfile: dest=/etc/default/docker line='DOCKER_OPTS="-H tcp://0.0.0.0:2375 -H unix:///var/run/docker.sock --storage-driver=aufs"'
+    - name: Add account to the docker group 
+      user: name={{ user_account }} groups=docker
+    - name: Restart Docker
+      command: service docker restart
+    - name: Test Docker
+      command: docker run hello-world
+
+    - name: Download Docker Compose Script
+      shell: /usr/bin/curl --location --output /usr/local/bin/docker-compose https://github.com/docker/compose/releases/download/{{ compose_version }}/docker-compose-`uname -s`-`uname -m` creates=/usr/local/bin/docker-compose
+    - name: Set Permission Bits On The Docker Compose Script
+      file: path=/usr/local/bin/docker-compose owner=root group=root mode=0555
+    - name: Echo Docker Compose version
+      command: docker-compose --version
+
+- name: Configure Rsyslog To Forward to Loggly
+  hosts: Ubuntu
+  sudo: True
+  vars_prompt:
+    - name: "logglyKey"
+      prompt: "The loggly API key to use when configuring the rsyslog daemon."
+      private: no
+      default: "91ec9498-62c1-42fc-b9e9-a977628cb17d"
+  vars:
+       logglyTag: "docker-registry"
+  tasks:
+    - name: Copy Rsyslog Configuration File 
+      template: src=templates/loggly.conf dest=/etc/rsyslog.d/22-loggly.conf mode=0444 backup=yes force=yes
+    - name: Restart the Rsyslog
+      command: /usr/sbin/service rsyslog restart
+    - name: Send a test message 
+      command: logger 'Hello From Ansible!'
+
+- name: Install Sysdig
+  hosts: Ubuntu
+  sudo: True
+  tasks:
+      - name: Download the signing key
+        apt_key: url=https://s3.amazonaws.com/download.draios.com/DRAIOS-GPG-KEY.public state=present
+      - name: Add the Apt repository
+        apt_repository: repo='deb http://download.draios.com/stable/deb stable-$(ARCH)/' state=present
+      - name: Install Headers
+        shell: apt-get -y install linux-headers-$(uname -r)
+      - name: Install Sysdig
+        apt: name=sysdig state=latest update_cache=true
+
+- name: Create a Docker Compose file 
+  hosts: Ubuntu
+  sudo: true
+  vars_prompt:
+    - name: "aws_key"
+      prompt: "The key value displayed at the end of the Terraform step."
+      private: no
+      default: "AKIAJFFJ73Z5VPCU7GUA"
+    - name: "aws_secret_key"
+      prompt: "The secret-key value displayed at the end of the Terraform step."
+      private: no
+      default: "tSduMZrxTJLrz4ahRj2DZwY8ZLfZk+T4gq/wGZ66"
+    - name: "aws_region"
+      prompt: "The AWS region that the Terraform step ran against."
+      private: no
+      default: "us-west-2"
+  vars:
+       bucket_name: "org-kurron-docker-registry"
+       auth_path: "/var/lib/auth"
+
+  tasks:
+    - name: Create auth directory
+      file: path={{ auth_path }} state=directory mode=0775 group=docker owner=root
+    - name: Copy Password File
+      template: src=files/htpasswd dest={{ auth_path }}/htpasswd mode=0660 backup=no force=yes
+    - name: Copy Docker Compose File
+      template: src=templates/docker-compose.yml dest=/home/ubuntu/docker-compose.yml mode=0444 backup=no force=yes
+
+- name: Run The Docker Compose file 
+  hosts: Ubuntu
+  sudo: false
+  tasks:
+    - name: Run The Docker Compose File
+      command: /usr/local/bin/docker-compose up -d chdir=/home/ubuntu
